@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🛟 Tube Randomizer</title>
+<style>
+  :root {
+    --bg1: #0a4d68;
+    --bg2: #088395;
+    --accent: #05bfdb;
+    --sun: #ffd43b;
+    --card: rgba(255,255,255,0.10);
+    --card-solid: #0e5a76;
+    --text: #f1faff;
+    --muted: #a9d6e5;
+    --green: #4caf50;
+    --whiteblue: #2f80ed;
+    --single: #ff9f1c;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.5px;
+  }
+  .subtitle { text-align: center; color: var(--muted); margin: 0 0 24px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    backdrop-filter: blur(6px);
+  }
+  .panel h2 {
+    font-size: 1.05rem;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel h2 .hint { font-weight: 400; font-size: 0.8rem; color: var(--muted); }
+
+  /* Chips (riders & tubes) */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 2px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-size: 0.95rem;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04303c;
+    font-weight: 600;
+  }
+  .chip .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+  .chip.off-look { opacity: 0.5; }
+
+  .tube-chip.on[data-tube="single"] { background: var(--single); border-color: var(--single); }
+  .tube-chip.on[data-tube="whiteblue"] { background: var(--whiteblue); border-color: var(--whiteblue); color: #fff; }
+  .tube-chip.on[data-tube="green"] { background: var(--green); border-color: var(--green); color: #fff; }
+
+  .row-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .mini-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .mini-btn:hover { background: rgba(255,255,255,0.2); }
+
+  /* Pair constraints */
+  .pair-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  select {
+    background: var(--card-solid);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+  }
+  .add-btn {
+    background: var(--accent); color: #04303c; border: none; font-weight: 600;
+    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  }
+  .add-btn:hover { filter: brightness(1.1); }
+  .pair-list { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 10px; }
+  .pair-item {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    padding: 6px 8px 6px 14px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.9rem;
+  }
+  .pair-item button {
+    background: var(--danger); color: #fff; border: none; border-radius: 50%;
+    width: 22px; height: 22px; cursor: pointer; line-height: 1; font-size: 0.9rem;
+  }
+
+  /* Randomize button */
+  .go-btn {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin: 6px auto 24px;
+    background: linear-gradient(135deg, var(--sun), #ffb703);
+    color: #4a2e00;
+    border: none;
+    padding: 18px;
+    border-radius: 16px;
+    font-size: 1.3rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(255,183,3,0.35);
+    transition: transform 0.1s ease;
+    letter-spacing: 0.5px;
+  }
+  .go-btn:active { transform: scale(0.97); }
+  .go-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .error-msg {
+    background: rgba(255,107,107,0.15);
+    border: 1px solid var(--danger);
+    color: #ffd0d0;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin: 0 auto 20px;
+    max-width: 640px;
+    text-align: center;
+  }
+
+  /* Results / tubes */
+  .tubes-area {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-top: 10px;
+  }
+  .tube-card {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 20px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .tube-card .tube-title { font-weight: 700; margin-bottom: 4px; font-size: 1.1rem; }
+  .tube-card .tube-cap { color: var(--muted); font-size: 0.82rem; margin-bottom: 14px; }
+
+  .donut {
+    width: 150px; height: 150px; margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    border: 22px solid var(--accent);
+  }
+  .donut::after {
+    content: ""; position: absolute; inset: 20px;
+    border-radius: 50%; background: rgba(255,255,255,0.08);
+    border: 2px dashed rgba(255,255,255,0.25);
+  }
+  .donut.single { border-color: var(--single); }
+  .donut.whiteblue { border-color: var(--whiteblue); }
+  .donut.green { border-color: var(--green); }
+
+  .riders-in {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; gap: 4px;
+    align-items: center; justify-content: center;
+    padding: 6px;
+  }
+  .rider-name {
+    font-weight: 700; font-size: 0.95rem;
+    background: rgba(0,0,0,0.35); border-radius: 8px; padding: 3px 8px;
+    white-space: nowrap;
+  }
+  .empty-seat { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); } to { transform: rotate(360deg); }
+  }
+  .donut.spinning { animation: spin 0.6s linear infinite; }
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .settled .rider-name { animation: pop 0.35s ease-out; }
+
+  .idle-note { text-align: center; color: var(--muted); grid-column: 1 / -1; padding: 30px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛟 Boat Tube Randomizer</h1>
+  <p class="subtitle">Shuffle the crew and see who rides with who!</p>
+
+  <!-- Riders -->
+  <div class="panel">
+    <h2>🧍 Riders <span class="hint">— tap to include / exclude</span></h2>
+    <div class="chips" id="riderChips"></div>
+    <div class="row-actions">
+      <button class="mini-btn" id="allRiders">Select all</button>
+      <button class="mini-btn" id="noRiders">Clear</button>
+      <span id="riderCount" class="hint" style="align-self:center;"></span>
+    </div>
+  </div>
+
+  <!-- Tubes -->
+  <div class="panel">
+    <h2>🛟 Tubes in use <span class="hint">— tap to toggle</span></h2>
+    <div class="chips" id="tubeChips"></div>
+    <div class="row-actions">
+      <span id="seatCount" class="hint" style="align-self:center;"></span>
+    </div>
+  </div>
+
+  <!-- Pairs -->
+  <div class="panel">
+    <h2>🤝 Ride-together rules <span class="hint">— force two riders onto the same tube</span></h2>
+    <div class="pair-form">
+      <select id="pairA"></select>
+      <span>rides with</span>
+      <select id="pairB"></select>
+      <button class="add-btn" id="addPair">+ Add rule</button>
+    </div>
+    <ul class="pair-list" id="pairList"></ul>
+  </div>
+
+  <button class="go-btn" id="goBtn">🎲 Randomize!</button>
+  <div id="errorBox"></div>
+
+  <div class="tubes-area" id="tubesArea">
+    <div class="idle-note">Pick your riders and tubes, then hit Randomize!</div>
+  </div>
+
+  <footer>Single = 1 rider · White/Blue = 2 riders · Green = 2 riders</footer>
+</div>
+
+<script>
+  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jaime","Gigi"];
+  const TUBES = [
+    { id: "single",    name: "Single Rider",    capacity: 1 },
+    { id: "whiteblue", name: "White/Blue Tube", capacity: 2 },
+    { id: "green",     name: "Green Tube",      capacity: 2 },
+  ];
+
+  // State
+  const state = {
+    riders: new Set(RIDERS),          // selected riders
+    tubes: new Set(TUBES.map(t=>t.id)), // selected tube ids
+    pairs: [],                        // [ [a,b], ... ]
+    current: null,                    // last assignment
+  };
+
+  // ---------- Rendering controls ----------
+  const riderChipsEl = document.getElementById("riderChips");
+  const tubeChipsEl = document.getElementById("tubeChips");
+  const riderCountEl = document.getElementById("riderCount");
+  const seatCountEl = document.getElementById("seatCount");
+
+  function renderRiderChips() {
+    riderChipsEl.innerHTML = "";
+    RIDERS.forEach(name => {
+      const on = state.riders.has(name);
+      const el = document.createElement("div");
+      el.className = "chip" + (on ? " on" : "");
+      el.innerHTML = `<span class="dot"></span>${name}`;
+      el.onclick = () => {
+        if (state.riders.has(name)) state.riders.delete(name);
+        else state.riders.add(name);
+        renderRiderChips();
+        refreshPairSelects();
+        renderPairList();
+        updateCounts();
+      };
+      riderChipsEl.appendChild(el);
+    });
+  }
+
+  function renderTubeChips() {
+    tubeChipsEl.innerHTML = "";
+    TUBES.forEach(t => {
+      const on = state.tubes.has(t.id);
+      const el = document.createElement("div");
+      el.className = "chip tube-chip" + (on ? " on" : "");
+      el.dataset.tube = t.id;
+      el.textContent = `${t.name} (${t.capacity})`;
+      el.onclick = () => {
+        if (state.tubes.has(t.id)) state.tubes.delete(t.id);
+        else state.tubes.add(t.id);
+        renderTubeChips();
+        updateCounts();
+      };
+      tubeChipsEl.appendChild(el);
+    });
+  }
+
+  function updateCounts() {
+    const r = state.riders.size;
+    const seats = TUBES.filter(t => state.tubes.has(t.id)).reduce((s,t)=>s+t.capacity,0);
+    riderCountEl.textContent = `${r} rider${r!==1?"s":""} selected`;
+    seatCountEl.textContent = `${seats} seat${seats!==1?"s":""} available`;
+  }
+
+  // ---------- Pair rules ----------
+  const pairAEl = document.getElementById("pairA");
+  const pairBEl = document.getElementById("pairB");
+  const pairListEl = document.getElementById("pairList");
+
+  function refreshPairSelects() {
+    const active = RIDERS.filter(r => state.riders.has(r));
+    [pairAEl, pairBEl].forEach(sel => {
+      const prev = sel.value;
+      sel.innerHTML = "";
+      active.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      if (active.includes(prev)) sel.value = prev;
+    });
+  }
+
+  function renderPairList() {
+    pairListEl.innerHTML = "";
+    // drop rules referencing unselected riders
+    state.pairs = state.pairs.filter(([a,b]) => state.riders.has(a) && state.riders.has(b));
+    state.pairs.forEach((pair, i) => {
+      const li = document.createElement("li");
+      li.className = "pair-item";
+      li.innerHTML = `<span>${pair[0]} 🤝 ${pair[1]}</span>`;
+      const btn = document.createElement("button");
+      btn.textContent = "×";
+      btn.onclick = () => { state.pairs.splice(i,1); renderPairList(); };
+      li.appendChild(btn);
+      pairListEl.appendChild(li);
+    });
+  }
+
+  document.getElementById("addPair").onclick = () => {
+    const a = pairAEl.value, b = pairBEl.value;
+    if (!a || !b || a === b) return;
+    const exists = state.pairs.some(([x,y]) =>
+      (x===a&&y===b) || (x===b&&y===a));
+    if (exists) return;
+    state.pairs.push([a,b]);
+    renderPairList();
+  };
+
+  document.getElementById("allRiders").onclick = () => {
+    RIDERS.forEach(r => state.riders.add(r));
+    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts();
+  };
+  document.getElementById("noRiders").onclick = () => {
+    state.riders.clear();
+    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts();
+  };
+
+  // ---------- Assignment logic ----------
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // Build "must ride together" groups via union-find over selected riders
+  function buildGroups() {
+    const riders = RIDERS.filter(r => state.riders.has(r));
+    const parent = {};
+    riders.forEach(r => parent[r] = r);
+    const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    const union = (a,b) => { parent[find(a)] = find(b); };
+    state.pairs.forEach(([a,b]) => {
+      if (parent[a] !== undefined && parent[b] !== undefined) union(a,b);
+    });
+    const map = {};
+    riders.forEach(r => {
+      const root = find(r);
+      (map[root] = map[root] || []).push(r);
+    });
+    return Object.values(map); // array of groups (arrays of names)
+  }
+
+  // Place groups into selected tubes, spreading riders across as many tubes
+  // as possible (fill each tube's first seat before doubling any tube up).
+  function spreadAssign(groups, tubes) {
+    const st = tubes.map(t => ({ id: t.id, name: t.name, capacity: t.capacity, riders: [] }));
+    const remaining = t => t.capacity - t.riders.length;
+
+    // Ride-together groups (size >= 2) claim a whole multi-seat tube first.
+    const pairGroups = shuffle(groups.filter(g => g.length >= 2));
+    for (const g of pairGroups) {
+      const cands = shuffle(st.filter(t => remaining(t) >= g.length));
+      if (cands.length === 0) return null;
+      cands[0].riders.push(...g);
+    }
+
+    // Solo riders go to the least-filled available tube (ties broken randomly),
+    // so riders spread out instead of clustering.
+    const singles = shuffle(groups.filter(g => g.length === 1));
+    for (const g of singles) {
+      const avail = st.filter(t => remaining(t) >= 1);
+      if (avail.length === 0) return null;
+      const minFill = Math.min(...avail.map(t => t.riders.length));
+      const cands = shuffle(avail.filter(t => t.riders.length === minFill));
+      cands[0].riders.push(...g);
+    }
+    return st;
+  }
+
+  function computeAssignment() {
+    const groups = buildGroups();
+    const tubes = TUBES.filter(t => state.tubes.has(t.id));
+    const riderCount = state.riders.size;
+    const seats = tubes.reduce((s,t)=>s+t.capacity,0);
+
+    if (tubes.length === 0) return { error: "Select at least one tube." };
+    if (riderCount === 0) return { error: "Select at least one rider." };
+
+    const bigGroup = groups.find(g => g.length > Math.max(...tubes.map(t=>t.capacity)));
+    if (bigGroup) return { error: `${bigGroup.join(" & ")} must ride together, but no selected tube fits ${bigGroup.length} people.` };
+
+    if (riderCount > seats) return { error: `Too many riders! ${riderCount} riders but only ${seats} seats. Add a tube or remove riders.` };
+
+    // number of groups needing a 2-cap tube vs available 2-cap tubes
+    const pairGroups = groups.filter(g => g.length === 2).length;
+    const twoCapTubes = tubes.filter(t => t.capacity >= 2).length;
+    if (pairGroups > twoCapTubes) return { error: `Not enough 2-person tubes for all ride-together pairs (${pairGroups} pairs, ${twoCapTubes} big tubes).` };
+
+    for (let i = 0; i < 3000; i++) {
+      const res = spreadAssign(groups, tubes);
+      if (res) return { assignment: res };
+    }
+    return { error: "Couldn't fit everyone with these rules. Try adjusting tubes or pairs." };
+  }
+
+  // ---------- Results rendering ----------
+  const tubesArea = document.getElementById("tubesArea");
+  const errorBox = document.getElementById("errorBox");
+  const goBtn = document.getElementById("goBtn");
+
+  function tubeClass(id) { return id; }
+
+  function renderResult(assignment, settled) {
+    tubesArea.innerHTML = "";
+    assignment.forEach(t => {
+      const card = document.createElement("div");
+      card.className = "tube-card" + (settled ? " settled" : "");
+      const seatsHtml = [];
+      for (let i = 0; i < t.capacity; i++) {
+        if (t.riders[i]) seatsHtml.push(`<div class="rider-name">${t.riders[i]}</div>`);
+        else seatsHtml.push(`<div class="empty-seat">empty</div>`);
+      }
+      card.innerHTML = `
+        <div class="tube-title">${t.name}</div>
+        <div class="tube-cap">${t.riders.length}/${t.capacity} riders</div>
+        <div class="donut ${tubeClass(t.id)} ${settled ? "" : "spinning"}"></div>
+        <div class="riders-in">${seatsHtml.join("")}</div>
+      `;
+      tubesArea.appendChild(card);
+    });
+  }
+
+  // A purely-visual random arrangement for the shuffle animation
+  function randomVisual(tubes, riders) {
+    const st = tubes.map(t => ({ id:t.id, name:t.name, capacity:t.capacity, riders:[] }));
+    const pool = shuffle(riders);
+    for (const r of pool) {
+      const open = shuffle(st.filter(t => t.riders.length < t.capacity));
+      if (open.length) open[0].riders.push(r);
+    }
+    return st;
+  }
+
+  goBtn.onclick = () => {
+    errorBox.innerHTML = "";
+    const result = computeAssignment();
+    if (result.error) {
+      errorBox.innerHTML = `<div class="error-msg">⚠️ ${result.error}</div>`;
+      return;
+    }
+
+    const tubes = TUBES.filter(t => state.tubes.has(t.id));
+    const riders = RIDERS.filter(r => state.riders.has(r));
+
+    goBtn.disabled = true;
+    let ticks = 0;
+    const maxTicks = 16;
+    const interval = setInterval(() => {
+      renderResult(randomVisual(tubes, riders), false);
+      ticks++;
+      if (ticks >= maxTicks) {
+        clearInterval(interval);
+        state.current = result.assignment;
+        renderResult(result.assignment, true);
+        goBtn.disabled = false;
+      }
+    }, 90);
+  };
+
+  // ---------- Init ----------
+  renderRiderChips();
+  renderTubeChips();
+  refreshPairSelects();
+  renderPairList();
+  updateCounts();
+</script>
+</body>
+</html>
