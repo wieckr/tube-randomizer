@@ -83,9 +83,9 @@
   .chip.off-look { opacity: 0.5; }
   .rider-chip.on { text-shadow: 0 1px 1px rgba(255,255,255,0.25); }
 
-  .tube-chip.on[data-tube="single"] { background: var(--single); border-color: var(--single); }
+  .tube-chip.on[data-tube="single"] { background: #7ac70c; border-color: #7ac70c; color: #0b2b33; }
   .tube-chip.on[data-tube="whiteblue"] { background: var(--whiteblue); border-color: var(--whiteblue); color: #fff; }
-  .tube-chip.on[data-tube="green"] { background: var(--green); border-color: var(--green); color: #fff; }
+  .tube-chip.on[data-tube="green"] { background: #8bc34a; border-color: #8bc34a; color: #0b2b33; }
 
   /* Tube rows with seat picker */
   .tube-row {
@@ -194,43 +194,39 @@
   .tube-card .tube-title { font-weight: 700; margin-bottom: 4px; font-size: 1.1rem; }
   .tube-card .tube-cap { color: var(--muted); font-size: 0.82rem; margin-bottom: 14px; }
 
-  .donut-wrap { position: relative; width: 160px; height: 160px; margin: 0 auto 14px; }
-  .donut {
+  .donut-wrap { position: relative; width: 100%; max-width: 260px; height: 210px; margin: 0 auto 14px; }
+  .tube-img {
     position: absolute; inset: 0;
-    box-sizing: border-box;
-    border-radius: 50%;
-    border: 22px solid var(--accent);
+    width: 100%; height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4));
   }
-  .donut::after {
-    content: ""; position: absolute; inset: 0;
-    border-radius: 50%; background: rgba(255,255,255,0.08);
-    border: 2px dashed rgba(255,255,255,0.25);
+  @keyframes wobble {
+    0%,100% { transform: rotate(-3deg) scale(1); }
+    50%     { transform: rotate(3deg) scale(1.03); }
   }
-  .donut.single { border-color: var(--single); }
-  .donut.whiteblue { border-color: var(--whiteblue); }
-  .donut.green { border-color: var(--green); }
+  .tube-img.spinning { animation: wobble 0.35s ease-in-out infinite; }
 
   .riders-in {
-    position: absolute; inset: 0; z-index: 2;
-    display: flex; flex-direction: column; gap: 4px;
+    display: flex; flex-wrap: wrap; gap: 6px;
     align-items: center; justify-content: center;
-    padding: 26px;
+    min-height: 30px;
   }
   .rider-name {
-    font-weight: 700; font-size: 0.88rem;
+    font-weight: 700; font-size: 0.86rem;
     color: #0b2b33;
     border-radius: 999px; padding: 3px 10px;
     white-space: nowrap;
     display: flex; align-items: center; gap: 5px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.55);
+    border: 1.5px solid rgba(255,255,255,0.85);
   }
   .rider-name .emoji { font-size: 1rem; }
-  .empty-seat { color: var(--muted); font-style: italic; font-size: 0.85rem; }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); } to { transform: rotate(360deg); }
+  .empty-seat {
+    color: #eaf6ff; font-style: italic; font-size: 0.82rem;
+    background: rgba(0,0,0,0.45); border-radius: 999px; padding: 2px 10px;
   }
-  .donut.spinning { animation: spin 0.6s linear infinite; }
+
   @keyframes pop {
     0% { transform: scale(0.6); opacity: 0; }
     60% { transform: scale(1.08); }
@@ -364,9 +360,9 @@
 <script>
   const RIDERS = ["Aiden","Ethan","Gigi","Graham","Henry","Jamie","Joey","Lady","Lexi","Murphy","Penn","Perry","Rylee"];
   const TUBES = [
-    { id: "single",    name: "Orange Tube" },
-    { id: "whiteblue", name: "White/Blue Tube" },
-    { id: "green",     name: "Green Tube" },
+    { id: "single",    name: "Full Force Ahead", img: "images/force.png",   accent: "#7ac70c" },
+    { id: "whiteblue", name: "H2-Oh Yeah!",       img: "images/gamma.png",   accent: "#2f80ed" },
+    { id: "green",     name: "Panic at the Lake", img: "images/frantic.png", accent: "#8bc34a" },
   ];
 
   // A consistent color + emoji for each rider.
@@ -387,6 +383,79 @@
   };
   const FALLBACK_STYLE = { color: "#adb5bd", emoji: "🛟" };
   const styleFor = name => RIDER_STYLE[name] || FALLBACK_STYLE;
+
+  // ---------- Tube images: strip background so tubes float on the card ----------
+  // Gradient-tolerant flood fill from the borders: expand into neighbors whose
+  // color is a smooth continuation (background/shadow/glow) and stop at the
+  // tube's sharp dark outline. Falls back to the raw image if the canvas is
+  // tainted (e.g. opened via file://).
+  const tubeImgSrc = {}; // id -> usable src (transparent PNG data URL, or original)
+  function knockoutBackground(img, srcFallback) {
+    try {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      const image = ctx.getImageData(0, 0, w, h);
+      const p = image.data;
+      const bg = new Uint8Array(w * h);
+      const stack = [];
+      const at = (x, y) => (y * w + x);
+      for (let x = 0; x < w; x++) { stack.push(x, 0, x, h - 1); }
+      for (let y = 0; y < h; y++) { stack.push(0, y, w - 1, y); }
+      const TOL = 16;      // small local step: hug the smooth backdrop, don't drift onto the tube
+      const SAT_MAX = 62;  // colorful tube areas (high saturation) are never background
+      const sat = o => Math.max(p[o], p[o + 1], p[o + 2]) - Math.min(p[o], p[o + 1], p[o + 2]);
+      while (stack.length) {
+        const y = stack.pop(), x = stack.pop();
+        const i = at(x, y);
+        if (bg[i]) continue;
+        const o = i * 4;
+        bg[i] = 1;
+        const r = p[o], g = p[o + 1], b = p[o + 2];
+        const neigh = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+        for (const [nx, ny] of neigh) {
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const ni = at(nx, ny);
+          if (bg[ni]) continue;
+          const no = ni * 4;
+          const d = Math.abs(p[no] - r) + Math.abs(p[no + 1] - g) + Math.abs(p[no + 2] - b);
+          if (d <= TOL && sat(no) <= SAT_MAX) stack.push(nx, ny);
+        }
+      }
+      // Erode the tube edge by 1px: any non-bg pixel touching bg also becomes bg,
+      // which removes the thin anti-aliased halo left around the outline.
+      const halo = [];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = at(x, y);
+        if (bg[i]) continue;
+        if ((x > 0 && bg[i - 1]) || (x < w - 1 && bg[i + 1]) ||
+            (y > 0 && bg[i - w]) || (y < h - 1 && bg[i + w])) halo.push(i);
+      }
+      halo.forEach(i => bg[i] = 1);
+      for (let i = 0; i < w * h; i++) if (bg[i]) p[i * 4 + 3] = 0;
+      ctx.putImageData(image, 0, 0);
+      return cv.toDataURL("image/png");
+    } catch (e) {
+      return srcFallback; // tainted canvas — use image as-is
+    }
+  }
+  function preloadTubeImages() {
+    TUBES.forEach(t => {
+      tubeImgSrc[t.id] = t.img; // sensible default until processed
+      const img = new Image();
+      img.onload = () => {
+        tubeImgSrc[t.id] = knockoutBackground(img, t.img);
+        // Refresh any already-rendered result with the cleaned image.
+        if (state.lastResult) {
+          document.querySelectorAll(`.tube-img[data-tube="${t.id}"]`)
+            .forEach(el => { el.src = tubeImgSrc[t.id]; });
+        }
+      };
+      img.src = t.img;
+    });
+  }
 
   // State
   const state = {
@@ -602,31 +671,59 @@
     return Object.values(map); // array of groups (arrays of names)
   }
 
-  // Place groups into selected tubes, spreading riders across as many tubes
-  // as possible (fill each tube's first seat before doubling any tube up).
-  function spreadAssign(groups, tubes) {
+  // Hidden "keep-apart" rules — these riders never share a tube.
+  // Not surfaced anywhere in the UI; enforced silently during placement.
+  const KEEP_APART = [
+    ["Aiden", "Ethan"],
+    ["Rylee", "Lexi"],
+    ["Rylee", "Henry"],
+  ];
+  const apart = (a, b) => KEEP_APART.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  const conflictsWithTube = (name, tubeRiders) => tubeRiders.some(r => apart(r, name));
+  const groupConflictsTube = (group, tubeRiders) => group.some(n => conflictsWithTube(n, tubeRiders));
+  function hasInternalConflict(group) {
+    for (let i = 0; i < group.length; i++)
+      for (let j = i + 1; j < group.length; j++)
+        if (apart(group[i], group[j])) return true;
+    return false;
+  }
+
+  // One random placement attempt: spread riders across tubes, respecting
+  // capacity, ride-together groups, and the hidden keep-apart rules.
+  function attemptAssign(groups, tubes) {
     const st = tubes.map(t => ({ id: t.id, name: t.name, capacity: t.capacity, riders: [] }));
     const remaining = t => t.capacity - t.riders.length;
 
     // Ride-together groups (size >= 2) claim a whole multi-seat tube first.
     const pairGroups = shuffle(groups.filter(g => g.length >= 2));
     for (const g of pairGroups) {
-      const cands = shuffle(st.filter(t => remaining(t) >= g.length));
+      if (hasInternalConflict(g)) return null; // group can never legally sit together
+      const cands = shuffle(st.filter(t => remaining(t) >= g.length && !groupConflictsTube(g, t.riders)));
       if (cands.length === 0) return null;
       cands[0].riders.push(...g);
     }
 
     // Solo riders go to the least-filled available tube (ties broken randomly),
-    // so riders spread out instead of clustering.
+    // skipping any tube that already holds a keep-apart partner.
     const singles = shuffle(groups.filter(g => g.length === 1));
     for (const g of singles) {
-      const avail = st.filter(t => remaining(t) >= 1);
+      const avail = st.filter(t => remaining(t) >= 1 && !conflictsWithTube(g[0], t.riders));
       if (avail.length === 0) return null;
       const minFill = Math.min(...avail.map(t => t.riders.length));
       const cands = shuffle(avail.filter(t => t.riders.length === minFill));
       cands[0].riders.push(...g);
     }
     return st;
+  }
+
+  // Retry attempts so an unlucky shuffle doesn't dead-end when a valid
+  // arrangement exists under the keep-apart rules.
+  function spreadAssign(groups, tubes) {
+    for (let i = 0; i < 300; i++) {
+      const res = attemptAssign(groups, tubes);
+      if (res) return res;
+    }
+    return null;
   }
 
   function computeAssignment() {
@@ -686,9 +783,9 @@
         <div class="tube-title">${t.name}</div>
         <div class="tube-cap">${t.riders.length}/${t.capacity} riders</div>
         <div class="donut-wrap">
-          <div class="donut ${tubeClass(t.id)} ${settled ? "" : "spinning"}"></div>
-          <div class="riders-in">${seatsHtml.join("")}</div>
+          <img class="tube-img ${settled ? "" : "spinning"}" data-tube="${t.id}" src="${tubeImgSrc[t.id] || t.img}" alt="${t.name}">
         </div>
+        <div class="riders-in">${seatsHtml.join("")}</div>
       `;
       tubesArea.appendChild(card);
     });
@@ -906,6 +1003,7 @@
 
   // ---------- Init ----------
   loadSaved();
+  preloadTubeImages();
   renderRiderChips();
   renderTubeChips();
   refreshPairSelects();
