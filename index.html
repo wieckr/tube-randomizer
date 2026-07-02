@@ -217,6 +217,24 @@
   .settled .rider-name { animation: pop 0.35s ease-out; }
 
   .idle-note { text-align: center; color: var(--muted); grid-column: 1 / -1; padding: 30px; }
+
+  /* On deck */
+  .ondeck-card {
+    margin-top: 22px;
+    background: rgba(255,212,59,0.10);
+    border: 1px dashed var(--sun);
+    border-radius: 16px;
+    padding: 16px 20px;
+    text-align: center;
+  }
+  .ondeck-title { font-weight: 700; margin-bottom: 12px; }
+  .deck-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .deck-chip {
+    background: var(--sun); color: #4a2e00; font-weight: 700;
+    padding: 6px 14px; border-radius: 999px; font-size: 0.95rem;
+    animation: pop 0.35s ease-out;
+  }
+  .ondeck-note { color: var(--muted); font-size: 0.82rem; margin-top: 12px; }
   footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 30px; }
 </style>
 </head>
@@ -264,11 +282,13 @@
     <div class="idle-note">Pick your riders and tubes, then hit Randomize!</div>
   </div>
 
+  <div id="onDeck"></div>
+
   <footer>Single = 1 rider · White/Blue = 2 riders · Green = 2 riders</footer>
 </div>
 
 <script>
-  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jaime","Gigi"];
+  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jamie","Gigi","Jowee","Lady"];
   const TUBES = [
     { id: "single",    name: "Single Rider",    capacity: 1 },
     { id: "whiteblue", name: "White/Blue Tube", capacity: 2 },
@@ -277,10 +297,11 @@
 
   // State
   const state = {
-    riders: new Set(RIDERS),          // selected riders
+    riders: new Set(),                // selected riders (start empty)
     tubes: new Set(TUBES.map(t=>t.id)), // selected tube ids
     pairs: [],                        // [ [a,b], ... ]
     current: null,                    // last assignment
+    lastBenched: new Set(),           // riders who sat out last round (get priority next)
   };
 
   // ---------- Rendering controls ----------
@@ -446,26 +467,31 @@
     const groups = buildGroups();
     const tubes = TUBES.filter(t => state.tubes.has(t.id));
     const riderCount = state.riders.size;
-    const seats = tubes.reduce((s,t)=>s+t.capacity,0);
+    const maxCap = tubes.length ? Math.max(...tubes.map(t => t.capacity)) : 0;
 
     if (tubes.length === 0) return { error: "Select at least one tube." };
     if (riderCount === 0) return { error: "Select at least one rider." };
 
-    const bigGroup = groups.find(g => g.length > Math.max(...tubes.map(t=>t.capacity)));
+    const bigGroup = groups.find(g => g.length > maxCap);
     if (bigGroup) return { error: `${bigGroup.join(" & ")} must ride together, but no selected tube fits ${bigGroup.length} people.` };
 
-    if (riderCount > seats) return { error: `Too many riders! ${riderCount} riders but only ${seats} seats. Add a tube or remove riders.` };
+    // Decide who rides. If there are more riders than seats, the extras go
+    // "on-deck". Riders who sat out last round are given priority to ride now.
+    const benchedFirst = shuffle(groups.filter(g => g.some(r => state.lastBenched.has(r))));
+    const rest = shuffle(groups.filter(g => !g.some(r => state.lastBenched.has(r))));
+    const order = [...benchedFirst, ...rest];
 
-    // number of groups needing a 2-cap tube vs available 2-cap tubes
-    const pairGroups = groups.filter(g => g.length === 2).length;
-    const twoCapTubes = tubes.filter(t => t.capacity >= 2).length;
-    if (pairGroups > twoCapTubes) return { error: `Not enough 2-person tubes for all ride-together pairs (${pairGroups} pairs, ${twoCapTubes} big tubes).` };
-
-    for (let i = 0; i < 3000; i++) {
-      const res = spreadAssign(groups, tubes);
-      if (res) return { assignment: res };
+    const chosen = [];
+    const benched = [];
+    for (const g of order) {
+      // A group rides only if the chosen-so-far set still packs into the tubes.
+      if (spreadAssign([...chosen, g], tubes)) chosen.push(g);
+      else benched.push(g);
     }
-    return { error: "Couldn't fit everyone with these rules. Try adjusting tubes or pairs." };
+
+    const assignment = spreadAssign(chosen, tubes);
+    if (!assignment) return { error: "Couldn't fit anyone with these rules. Try adjusting tubes or pairs." };
+    return { assignment, benched: benched.flat() };
   }
 
   // ---------- Results rendering ----------
@@ -495,6 +521,18 @@
     });
   }
 
+  const onDeckEl = document.getElementById("onDeck");
+  function renderOnDeck(benched) {
+    if (!benched || benched.length === 0) { onDeckEl.innerHTML = ""; return; }
+    const chips = benched.map(n => `<span class="deck-chip">${n}</span>`).join("");
+    onDeckEl.innerHTML = `
+      <div class="ondeck-card">
+        <div class="ondeck-title">🪑 On deck — sitting out this ride</div>
+        <div class="deck-chips">${chips}</div>
+        <div class="ondeck-note">They'll get first priority on the next Randomize.</div>
+      </div>`;
+  }
+
   // A purely-visual random arrangement for the shuffle animation
   function randomVisual(tubes, riders) {
     const st = tubes.map(t => ({ id:t.id, name:t.name, capacity:t.capacity, riders:[] }));
@@ -517,6 +555,7 @@
     const tubes = TUBES.filter(t => state.tubes.has(t.id));
     const riders = RIDERS.filter(r => state.riders.has(r));
 
+    onDeckEl.innerHTML = "";
     goBtn.disabled = true;
     let ticks = 0;
     const maxTicks = 16;
@@ -526,7 +565,9 @@
       if (ticks >= maxTicks) {
         clearInterval(interval);
         state.current = result.assignment;
+        state.lastBenched = new Set(result.benched);
         renderResult(result.assignment, true);
+        renderOnDeck(result.benched);
         goBtn.disabled = false;
       }
     }, 90);
