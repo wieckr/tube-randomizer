@@ -56,6 +56,7 @@
 
   /* Chips (riders & tubes) */
   .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  #tubeChips { flex-direction: column; align-items: stretch; }
   .chip {
     cursor: pointer;
     user-select: none;
@@ -83,6 +84,21 @@
   .tube-chip.on[data-tube="single"] { background: var(--single); border-color: var(--single); }
   .tube-chip.on[data-tube="whiteblue"] { background: var(--whiteblue); border-color: var(--whiteblue); color: #fff; }
   .tube-chip.on[data-tube="green"] { background: var(--green); border-color: var(--green); color: #fff; }
+
+  /* Tube rows with seat picker */
+  .tube-row {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px;
+    padding: 8px 12px;
+    transition: opacity 0.15s ease;
+  }
+  .tube-row.off-look { opacity: 0.5; }
+  .tube-row .tube-chip { flex: 0 0 auto; }
+  .cap-picker { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .cap-picker select { padding: 6px 8px; }
+  .cap-label { color: var(--muted); font-size: 0.82rem; }
 
   .row-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
   .mini-btn {
@@ -284,25 +300,32 @@
 
   <div id="onDeck"></div>
 
-  <footer>Single = 1 rider · White/Blue = 2 riders · Green = 2 riders</footer>
+  <footer>Set each tube to hold 1–3 riders · riders spread evenly across tubes in use</footer>
 </div>
 
 <script>
-  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jamie","Gigi","Jowee","Lady"];
+  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jamie","Gigi","Jowee","Lady","Graham"];
   const TUBES = [
-    { id: "single",    name: "Single Rider",    capacity: 1 },
-    { id: "whiteblue", name: "White/Blue Tube", capacity: 2 },
-    { id: "green",     name: "Green Tube",      capacity: 2 },
+    { id: "single",    name: "Orange Tube" },
+    { id: "whiteblue", name: "White/Blue Tube" },
+    { id: "green",     name: "Green Tube" },
   ];
 
   // State
   const state = {
     riders: new Set(),                // selected riders (start empty)
     tubes: new Set(TUBES.map(t=>t.id)), // selected tube ids
+    capacities: { single: 2, whiteblue: 2, green: 2 }, // seats per tube (1-3, default 2)
     pairs: [],                        // [ [a,b], ... ]
     current: null,                    // last assignment
     lastBenched: new Set(),           // riders who sat out last round (get priority next)
   };
+
+  // Selected tubes with their current capacity.
+  function activeTubes() {
+    return TUBES.filter(t => state.tubes.has(t.id))
+      .map(t => ({ id: t.id, name: t.name, capacity: state.capacities[t.id] }));
+  }
 
   // ---------- Rendering controls ----------
   const riderChipsEl = document.getElementById("riderChips");
@@ -333,23 +356,43 @@
     tubeChipsEl.innerHTML = "";
     TUBES.forEach(t => {
       const on = state.tubes.has(t.id);
-      const el = document.createElement("div");
-      el.className = "chip tube-chip" + (on ? " on" : "");
-      el.dataset.tube = t.id;
-      el.textContent = `${t.name} (${t.capacity})`;
-      el.onclick = () => {
+      const row = document.createElement("div");
+      row.className = "tube-row" + (on ? "" : " off-look");
+
+      const chip = document.createElement("div");
+      chip.className = "chip tube-chip" + (on ? " on" : "");
+      chip.dataset.tube = t.id;
+      chip.textContent = t.name;
+      chip.onclick = () => {
         if (state.tubes.has(t.id)) state.tubes.delete(t.id);
         else state.tubes.add(t.id);
         renderTubeChips();
         updateCounts();
       };
-      tubeChipsEl.appendChild(el);
+
+      const cap = document.createElement("div");
+      cap.className = "cap-picker";
+      const sel = document.createElement("select");
+      [1,2,3].forEach(n => {
+        const opt = document.createElement("option");
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      });
+      sel.value = state.capacities[t.id];
+      sel.onchange = () => { state.capacities[t.id] = +sel.value; updateCounts(); };
+      const lbl = document.createElement("span");
+      lbl.className = "cap-label";
+      lbl.textContent = "seats";
+      cap.append(sel, lbl);
+
+      row.append(chip, cap);
+      tubeChipsEl.appendChild(row);
     });
   }
 
   function updateCounts() {
     const r = state.riders.size;
-    const seats = TUBES.filter(t => state.tubes.has(t.id)).reduce((s,t)=>s+t.capacity,0);
+    const seats = activeTubes().reduce((s,t)=>s+t.capacity,0);
     riderCountEl.textContent = `${r} rider${r!==1?"s":""} selected`;
     seatCountEl.textContent = `${seats} seat${seats!==1?"s":""} available`;
   }
@@ -465,7 +508,7 @@
 
   function computeAssignment() {
     const groups = buildGroups();
-    const tubes = TUBES.filter(t => state.tubes.has(t.id));
+    const tubes = activeTubes();
     const riderCount = state.riders.size;
     const maxCap = tubes.length ? Math.max(...tubes.map(t => t.capacity)) : 0;
 
@@ -552,7 +595,7 @@
       return;
     }
 
-    const tubes = TUBES.filter(t => state.tubes.has(t.id));
+    const tubes = activeTubes();
     const riders = RIDERS.filter(r => state.riders.has(r));
 
     onDeckEl.innerHTML = "";
