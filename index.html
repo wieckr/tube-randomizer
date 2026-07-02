@@ -79,7 +79,9 @@
     font-weight: 600;
   }
   .chip .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+  .chip .emoji { font-size: 1.05rem; line-height: 1; }
   .chip.off-look { opacity: 0.5; }
+  .rider-chip.on { text-shadow: 0 1px 1px rgba(255,255,255,0.25); }
 
   .tube-chip.on[data-tube="single"] { background: var(--single); border-color: var(--single); }
   .tube-chip.on[data-tube="whiteblue"] { background: var(--whiteblue); border-color: var(--whiteblue); color: #fff; }
@@ -192,15 +194,15 @@
   .tube-card .tube-title { font-weight: 700; margin-bottom: 4px; font-size: 1.1rem; }
   .tube-card .tube-cap { color: var(--muted); font-size: 0.82rem; margin-bottom: 14px; }
 
+  .donut-wrap { position: relative; width: 160px; height: 160px; margin: 0 auto 14px; }
   .donut {
-    width: 150px; height: 150px; margin: 0 auto 14px;
+    position: absolute; inset: 0;
+    box-sizing: border-box;
     border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    position: relative;
     border: 22px solid var(--accent);
   }
   .donut::after {
-    content: ""; position: absolute; inset: 20px;
+    content: ""; position: absolute; inset: 0;
     border-radius: 50%; background: rgba(255,255,255,0.08);
     border: 2px dashed rgba(255,255,255,0.25);
   }
@@ -209,16 +211,20 @@
   .donut.green { border-color: var(--green); }
 
   .riders-in {
-    position: relative; z-index: 2;
+    position: absolute; inset: 0; z-index: 2;
     display: flex; flex-direction: column; gap: 4px;
     align-items: center; justify-content: center;
-    padding: 6px;
+    padding: 26px;
   }
   .rider-name {
-    font-weight: 700; font-size: 0.95rem;
-    background: rgba(0,0,0,0.35); border-radius: 8px; padding: 3px 8px;
+    font-weight: 700; font-size: 0.88rem;
+    color: #0b2b33;
+    border-radius: 999px; padding: 3px 10px;
     white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
   }
+  .rider-name .emoji { font-size: 1rem; }
   .empty-seat { color: var(--muted); font-style: italic; font-size: 0.85rem; }
 
   @keyframes spin {
@@ -249,9 +255,39 @@
     background: var(--sun); color: #4a2e00; font-weight: 700;
     padding: 6px 14px; border-radius: 999px; font-size: 0.95rem;
     animation: pop 0.35s ease-out;
+    display: inline-flex; align-items: center; gap: 6px;
   }
   .ondeck-note { color: var(--muted); font-size: 0.82rem; margin-top: 12px; }
+
+  /* Stats & history */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; }
+  @media (max-width: 640px) { .stats-grid { grid-template-columns: 1fr; } }
+  .stats-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .stats-table th, .stats-table td {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.10);
+  }
+  .stats-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+  .stats-table td:nth-child(2), .stats-table td:nth-child(3),
+  .stats-table th:nth-child(2), .stats-table th:nth-child(3) { text-align: center; width: 70px; }
+  .history-title { color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; font-weight: 600; }
+  .history-body { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .round {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 10px;
+  }
+  .round-n { color: var(--muted); font-weight: 700; font-size: 0.8rem; }
+  .round-tube, .round-bench { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); }
+  .mini-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: #0b2b33; font-weight: 700; font-size: 0.78rem;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .mini-pill .emoji { font-size: 0.85rem; }
+
   footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 30px; }
+
+  /* Confetti / splash overlay */
+  #fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
 </style>
 </head>
 <body>
@@ -300,16 +336,57 @@
 
   <div id="onDeck"></div>
 
+  <!-- Ride history & fairness -->
+  <div class="panel" id="statsPanel" style="display:none;">
+    <h2>📊 Ride history &amp; fairness <span class="hint">— totals for this saved session</span></h2>
+    <div class="stats-grid">
+      <div>
+        <table class="stats-table">
+          <thead><tr><th>Rider</th><th>Rides</th><th>Sat out</th></tr></thead>
+          <tbody id="statsBody"></tbody>
+        </table>
+      </div>
+      <div>
+        <div class="history-title">Recent rounds</div>
+        <div id="historyBody" class="history-body"></div>
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="mini-btn" id="resetHistory">Reset history &amp; stats</button>
+    </div>
+  </div>
+
   <footer>Set each tube to hold 1–3 riders · riders spread evenly across tubes in use</footer>
 </div>
 
+<canvas id="fx"></canvas>
+
 <script>
-  const RIDERS = ["Aiden","Ethan","Rylee","Penn","Lexi","Henry","Murphy","Perry","Jamie","Gigi","Jowee","Lady","Graham"];
+  const RIDERS = ["Aiden","Ethan","Gigi","Graham","Henry","Jamie","Joey","Lady","Lexi","Murphy","Penn","Perry","Rylee"];
   const TUBES = [
     { id: "single",    name: "Orange Tube" },
     { id: "whiteblue", name: "White/Blue Tube" },
     { id: "green",     name: "Green Tube" },
   ];
+
+  // A consistent color + emoji for each rider.
+  const RIDER_STYLE = {
+    Aiden:  { color: "#ff6b6b", emoji: "🦈" },
+    Ethan:  { color: "#ff922b", emoji: "🐙" },
+    Gigi:   { color: "#fcc419", emoji: "🐠" },
+    Graham: { color: "#94d82d", emoji: "🐢" },
+    Henry:  { color: "#51cf66", emoji: "🐬" },
+    Jamie:  { color: "#20c997", emoji: "🦀" },
+    Joey:   { color: "#22b8cf", emoji: "🐳" },
+    Lady:   { color: "#4dabf7", emoji: "🦩" },
+    Lexi:   { color: "#748ffc", emoji: "🐡" },
+    Murphy: { color: "#9775fa", emoji: "🦑" },
+    Penn:   { color: "#da77f2", emoji: "🐊" },
+    Perry:  { color: "#f783ac", emoji: "🦭" },
+    Rylee:  { color: "#ff8787", emoji: "🦆" },
+  };
+  const FALLBACK_STYLE = { color: "#adb5bd", emoji: "🛟" };
+  const styleFor = name => RIDER_STYLE[name] || FALLBACK_STYLE;
 
   // State
   const state = {
@@ -319,12 +396,47 @@
     pairs: [],                        // [ [a,b], ... ]
     current: null,                    // last assignment
     lastBenched: new Set(),           // riders who sat out last round (get priority next)
+    lastResult: null,                 // { assignment, benched } to restore on reload
+    history: [],                      // recent rounds (newest first)
+    stats: {},                        // { name: { rides, sits } }
   };
 
   // Selected tubes with their current capacity.
   function activeTubes() {
     return TUBES.filter(t => state.tubes.has(t.id))
       .map(t => ({ id: t.id, name: t.name, capacity: state.capacities[t.id] }));
+  }
+
+  // ---------- Persistence ----------
+  const LS_KEY = "tubeRandomizer.v1";
+  function persist() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        riders: [...state.riders],
+        tubes: [...state.tubes],
+        capacities: state.capacities,
+        pairs: state.pairs,
+        lastBenched: [...state.lastBenched],
+        lastResult: state.lastResult,
+        history: state.history,
+        stats: state.stats,
+      }));
+    } catch (e) { /* storage unavailable — ignore */ }
+  }
+  function loadSaved() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.riders) state.riders = new Set(d.riders.filter(r => RIDERS.includes(r)));
+      if (d.tubes) state.tubes = new Set(d.tubes.filter(t => TUBES.some(x => x.id === t)));
+      if (d.capacities) state.capacities = { ...state.capacities, ...d.capacities };
+      if (Array.isArray(d.pairs)) state.pairs = d.pairs.filter(p => RIDERS.includes(p[0]) && RIDERS.includes(p[1]));
+      if (d.lastBenched) state.lastBenched = new Set(d.lastBenched);
+      if (d.lastResult) state.lastResult = d.lastResult;
+      if (Array.isArray(d.history)) state.history = d.history;
+      if (d.stats) state.stats = d.stats;
+    } catch (e) { /* corrupt data — ignore */ }
   }
 
   // ---------- Rendering controls ----------
@@ -337,9 +449,17 @@
     riderChipsEl.innerHTML = "";
     RIDERS.forEach(name => {
       const on = state.riders.has(name);
+      const st = styleFor(name);
       const el = document.createElement("div");
-      el.className = "chip" + (on ? " on" : "");
-      el.innerHTML = `<span class="dot"></span>${name}`;
+      el.className = "chip rider-chip" + (on ? " on" : "");
+      el.innerHTML = `<span class="emoji">${st.emoji}</span>${name}`;
+      if (on) {
+        el.style.background = st.color;
+        el.style.borderColor = st.color;
+        el.style.color = "#0b2b33";
+      } else {
+        el.style.borderColor = st.color;
+      }
       el.onclick = () => {
         if (state.riders.has(name)) state.riders.delete(name);
         else state.riders.add(name);
@@ -347,6 +467,7 @@
         refreshPairSelects();
         renderPairList();
         updateCounts();
+        persist();
       };
       riderChipsEl.appendChild(el);
     });
@@ -368,6 +489,7 @@
         else state.tubes.add(t.id);
         renderTubeChips();
         updateCounts();
+        persist();
       };
 
       const cap = document.createElement("div");
@@ -379,7 +501,7 @@
         sel.appendChild(opt);
       });
       sel.value = state.capacities[t.id];
-      sel.onchange = () => { state.capacities[t.id] = +sel.value; updateCounts(); };
+      sel.onchange = () => { state.capacities[t.id] = +sel.value; updateCounts(); persist(); };
       const lbl = document.createElement("span");
       lbl.className = "cap-label";
       lbl.textContent = "seats";
@@ -426,7 +548,7 @@
       li.innerHTML = `<span>${pair[0]} 🤝 ${pair[1]}</span>`;
       const btn = document.createElement("button");
       btn.textContent = "×";
-      btn.onclick = () => { state.pairs.splice(i,1); renderPairList(); };
+      btn.onclick = () => { state.pairs.splice(i,1); renderPairList(); persist(); };
       li.appendChild(btn);
       pairListEl.appendChild(li);
     });
@@ -440,15 +562,16 @@
     if (exists) return;
     state.pairs.push([a,b]);
     renderPairList();
+    persist();
   };
 
   document.getElementById("allRiders").onclick = () => {
     RIDERS.forEach(r => state.riders.add(r));
-    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts();
+    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts(); persist();
   };
   document.getElementById("noRiders").onclick = () => {
     state.riders.clear();
-    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts();
+    renderRiderChips(); refreshPairSelects(); renderPairList(); updateCounts(); persist();
   };
 
   // ---------- Assignment logic ----------
@@ -551,14 +674,21 @@
       card.className = "tube-card" + (settled ? " settled" : "");
       const seatsHtml = [];
       for (let i = 0; i < t.capacity; i++) {
-        if (t.riders[i]) seatsHtml.push(`<div class="rider-name">${t.riders[i]}</div>`);
-        else seatsHtml.push(`<div class="empty-seat">empty</div>`);
+        const n = t.riders[i];
+        if (n) {
+          const s = styleFor(n);
+          seatsHtml.push(`<div class="rider-name" style="background:${s.color}"><span class="emoji">${s.emoji}</span>${n}</div>`);
+        } else {
+          seatsHtml.push(`<div class="empty-seat">empty</div>`);
+        }
       }
       card.innerHTML = `
         <div class="tube-title">${t.name}</div>
         <div class="tube-cap">${t.riders.length}/${t.capacity} riders</div>
-        <div class="donut ${tubeClass(t.id)} ${settled ? "" : "spinning"}"></div>
-        <div class="riders-in">${seatsHtml.join("")}</div>
+        <div class="donut-wrap">
+          <div class="donut ${tubeClass(t.id)} ${settled ? "" : "spinning"}"></div>
+          <div class="riders-in">${seatsHtml.join("")}</div>
+        </div>
       `;
       tubesArea.appendChild(card);
     });
@@ -567,7 +697,10 @@
   const onDeckEl = document.getElementById("onDeck");
   function renderOnDeck(benched) {
     if (!benched || benched.length === 0) { onDeckEl.innerHTML = ""; return; }
-    const chips = benched.map(n => `<span class="deck-chip">${n}</span>`).join("");
+    const chips = benched.map(n => {
+      const s = styleFor(n);
+      return `<span class="deck-chip"><span class="emoji">${s.emoji}</span>${n}</span>`;
+    }).join("");
     onDeckEl.innerHTML = `
       <div class="ondeck-card">
         <div class="ondeck-title">🪑 On deck — sitting out this ride</div>
@@ -609,19 +742,180 @@
         clearInterval(interval);
         state.current = result.assignment;
         state.lastBenched = new Set(result.benched);
+        state.lastResult = { assignment: result.assignment, benched: result.benched };
+        recordRound(result.assignment, result.benched);
         renderResult(result.assignment, true);
         renderOnDeck(result.benched);
+        renderStats();
+        celebrate();
+        persist();
         goBtn.disabled = false;
       }
     }, 90);
   };
 
+  // ---------- Ride history & fairness ----------
+  function recordRound(assignment, benched) {
+    const nextN = (state.history.length ? state.history[0].n : 0) + 1;
+    assignment.flatMap(t => t.riders).forEach(n => {
+      state.stats[n] = state.stats[n] || { rides: 0, sits: 0 };
+      state.stats[n].rides++;
+    });
+    benched.forEach(n => {
+      state.stats[n] = state.stats[n] || { rides: 0, sits: 0 };
+      state.stats[n].sits++;
+    });
+    state.history.unshift({
+      n: nextN,
+      tubes: assignment.map(t => ({ name: t.name, id: t.id, riders: t.riders.slice() })),
+      benched: benched.slice(),
+    });
+    if (state.history.length > 25) state.history.pop();
+  }
+
+  const statsPanel = document.getElementById("statsPanel");
+  const statsBody = document.getElementById("statsBody");
+  const historyBody = document.getElementById("historyBody");
+
+  function pill(name) {
+    const s = styleFor(name);
+    return `<span class="mini-pill" style="background:${s.color}"><span class="emoji">${s.emoji}</span>${name}</span>`;
+  }
+
+  function renderStats() {
+    const names = Object.keys(state.stats);
+    if (names.length === 0) { statsPanel.style.display = "none"; return; }
+    statsPanel.style.display = "";
+
+    // Fairness table — most-benched surfaced first.
+    const rows = names
+      .map(n => ({ n, rides: state.stats[n].rides || 0, sits: state.stats[n].sits || 0 }))
+      .sort((a, b) => b.sits - a.sits || a.rides - b.rides || a.n.localeCompare(b.n));
+    statsBody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${pill(r.n)}</td>
+        <td>${r.rides}</td>
+        <td>${r.sits}</td>
+      </tr>`).join("");
+
+    // Recent rounds.
+    historyBody.innerHTML = state.history.map(round => {
+      const tubes = round.tubes
+        .filter(t => t.riders.length)
+        .map(t => `<span class="round-tube">${t.name}: ${t.riders.map(pill).join(" ")}</span>`)
+        .join("");
+      const bench = round.benched.length
+        ? `<span class="round-bench">🪑 ${round.benched.map(pill).join(" ")}</span>` : "";
+      return `<div class="round"><span class="round-n">#${round.n}</span>${tubes}${bench}</div>`;
+    }).join("");
+  }
+
+  document.getElementById("resetHistory").onclick = () => {
+    state.history = [];
+    state.stats = {};
+    state.lastBenched = new Set();
+    renderStats();
+    persist();
+  };
+
+  // ---------- Confetti + splash reveal ----------
+  const fxCanvas = document.getElementById("fx");
+  const fxCtx = fxCanvas.getContext("2d");
+  let fxParticles = [];
+  let fxRunning = false;
+
+  function celebrate() {
+    const W = fxCanvas.width = window.innerWidth;
+    const H = fxCanvas.height = window.innerHeight;
+    const colors = Object.values(RIDER_STYLE).map(s => s.color).concat(["#ffd43b", "#05bfdb", "#ffffff"]);
+    fxParticles = [];
+
+    // Confetti raining from the top.
+    for (let i = 0; i < 110; i++) {
+      fxParticles.push({
+        type: "confetti",
+        x: Math.random() * W,
+        y: -20 - Math.random() * H * 0.3,
+        vx: (Math.random() - 0.5) * 3,
+        vy: 3 + Math.random() * 4,
+        size: 6 + Math.random() * 7,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        life: 1,
+      });
+    }
+    // Water droplets splashing up from the bottom center.
+    for (let i = 0; i < 45; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+      const speed = 9 + Math.random() * 9;
+      fxParticles.push({
+        type: "drop",
+        x: W / 2 + (Math.random() - 0.5) * 120,
+        y: H + 10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 4 + Math.random() * 5,
+        color: Math.random() < 0.5 ? "#a5e6ff" : "#67d0f0",
+        life: 1,
+      });
+    }
+    if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxTick); }
+  }
+
+  function fxTick() {
+    const W = fxCanvas.width, H = fxCanvas.height;
+    fxCtx.clearRect(0, 0, W, H);
+    const gravity = 0.35;
+    let alive = 0;
+    for (const p of fxParticles) {
+      if (p.life <= 0) continue;
+      p.vy += gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.type === "confetti") {
+        p.rot += p.vr;
+        if (p.y > H + 30) p.life = 0;
+      } else {
+        p.vx *= 0.99;
+        if (p.y > H + 30) p.life = 0;
+      }
+      if (p.life <= 0) continue;
+      alive++;
+      fxCtx.save();
+      fxCtx.globalAlpha = 0.95;
+      fxCtx.fillStyle = p.color;
+      if (p.type === "confetti") {
+        fxCtx.translate(p.x, p.y);
+        fxCtx.rotate(p.rot);
+        fxCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      } else {
+        fxCtx.beginPath();
+        fxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        fxCtx.fill();
+      }
+      fxCtx.restore();
+    }
+    if (alive > 0) {
+      requestAnimationFrame(fxTick);
+    } else {
+      fxRunning = false;
+      fxCtx.clearRect(0, 0, W, H);
+    }
+  }
+
   // ---------- Init ----------
+  loadSaved();
   renderRiderChips();
   renderTubeChips();
   refreshPairSelects();
   renderPairList();
   updateCounts();
+  renderStats();
+  if (state.lastResult) {
+    renderResult(state.lastResult.assignment, true);
+    renderOnDeck(state.lastResult.benched);
+  }
 </script>
 </body>
 </html>
